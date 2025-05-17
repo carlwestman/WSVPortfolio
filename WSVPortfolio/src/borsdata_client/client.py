@@ -2,7 +2,17 @@
 Base client for Borsdata API.
 """
 import requests
+import os
 from typing import Optional, TYPE_CHECKING
+from typing_extensions import Literal, TypeAlias
+
+# --- Type Aliases for API enums ---
+ReportType: TypeAlias = Literal["year", "r12", "quarter"]
+PriceType: TypeAlias = Literal["mean", "low", "high"]
+CalcGroup: TypeAlias = Literal["last", "1year", "3year", "7year", "10year", "15year"]
+Calc: TypeAlias = Literal[
+    "high", "latest", "low", "mean", "sum", "cagr", "psh", "trend", "over", "under", "diff", "rank", "point", "default", "return", "stabil", "quarter", "pricehigh", "pricelow", "brank", "ShortSum", "ShortCountry", "ShortIndustry"
+]
 
 if TYPE_CHECKING:
     from .models import (
@@ -15,6 +25,10 @@ if TYPE_CHECKING:
 class BorsdataAPIClient:
     def __init__(self, base_url: str = "https://apiservice.borsdata.se", api_key: Optional[str] = None):
         self.base_url = base_url.rstrip("/")
+        if api_key is None:
+            api_key = os.environ.get("BORSDATA_API_KEY")
+            if not api_key:
+                raise RuntimeError("BORSDATA_API_KEY environment variable must be set or api_key provided.")
         self.api_key = api_key
         self.session = requests.Session()
         if api_key:
@@ -43,7 +57,7 @@ class BorsdataAPIClient:
         return TranslationMetadataRespV1.parse_obj(self._get("/v1/translationmetadata", params={"authKey": authKey}))
 
     # --- Reports ---
-    def get_reports(self, instrument_id: int, reporttype: str) -> 'ReportsRespV1':
+    def get_reports(self, instrument_id: int, reporttype: ReportType) -> 'ReportsRespV1':
         """Returns Reports for Instrument. Report Type (year, r12, quarter)."""
         from .models import ReportsRespV1
         return ReportsRespV1.parse_obj(self._get(f"/v1/instruments/{instrument_id}/reports/{reporttype}"))
@@ -58,10 +72,12 @@ class BorsdataAPIClient:
         from .models import ReportMetadataRespV1
         return ReportMetadataRespV1.parse_obj(self._get("/v1/instruments/reports/metadata"))
 
-    def get_reports_array(self, instList: str, authKey: str, from_date: str = None, to_date: str = None) -> 'ReportsArrayRespV1':
-        """Returns Reports for list of instruments. instList is comma-separated IDs."""
+    def get_reports_array(self, instList: str, authKey: str, reporttype: Optional[ReportType] = None, from_date: str = None, to_date: str = None) -> 'ReportsArrayRespV1':
+        """Returns Reports for list of instruments. instList is comma-separated IDs. Optionally filter by reporttype."""
         from .models import ReportsArrayRespV1
         params = {"instList": instList, "authKey": authKey}
+        if reporttype:
+            params["reporttype"] = reporttype
         if from_date:
             params["from"] = from_date
         if to_date:
@@ -113,32 +129,32 @@ class BorsdataAPIClient:
         return StockSplitRespV1.parse_obj(self._get("/v1/instruments/StockSplits", params=params))
 
     # --- KPIs ---
-    def get_kpi_history(self, insid: int, kpiId: int, reporttype: str, pricetype: str) -> 'KpisHistoryRespV1':
+    def get_kpi_history(self, insid: int, kpiId: int, reporttype: ReportType, pricetype: PriceType) -> 'KpisHistoryRespV1':
         """Returns KPI history for an instrument."""
         from .models import KpisHistoryRespV1
         return KpisHistoryRespV1.parse_obj(self._get(f"/v1/instruments/{insid}/kpis/{kpiId}/{reporttype}/{pricetype}/history"))
 
-    def get_kpi_summary(self, insid: int, reporttype: str) -> 'KpisSummaryRespV1':
+    def get_kpi_summary(self, insid: int, reporttype: ReportType) -> 'KpisSummaryRespV1':
         """Returns KPI summary for an instrument."""
         from .models import KpisSummaryRespV1
         return KpisSummaryRespV1.parse_obj(self._get(f"/v1/instruments/{insid}/kpis/{reporttype}/summary"))
 
-    def get_kpi_history_alt(self, kpiId: int, reporttype: str, pricetype: str) -> 'KpisHistoryArrayRespV1':
+    def get_kpi_history_alt(self, kpiId: int, reporttype: ReportType, pricetype: PriceType) -> 'KpisHistoryArrayRespV1':
         """Returns KPI history for all instruments for a KPI."""
         from .models import KpisHistoryArrayRespV1
         return KpisHistoryArrayRespV1.parse_obj(self._get(f"/v1/instruments/kpis/{kpiId}/{reporttype}/{pricetype}/history"))
 
-    def get_kpi_calc(self, insid: int, kpiId: int, calcGroup: str, calc: str) -> 'KpisRespV1':
+    def get_kpi_calc(self, insid: int, kpiId: int, calcGroup: CalcGroup, calc: Calc) -> 'KpisRespV1':
         """Returns calculated KPI for an instrument."""
         from .models import KpisRespV1
         return KpisRespV1.parse_obj(self._get(f"/v1/instruments/{insid}/kpis/{kpiId}/{calcGroup}/{calc}"))
 
-    def get_kpi_calc_alt(self, kpiId: int, calcGroup: str, calc: str) -> 'KpisAllCompRespV1':
+    def get_kpi_calc_alt(self, kpiId: int, calcGroup: CalcGroup, calc: Calc) -> 'KpisAllCompRespV1':
         """Returns calculated KPI for all instruments for a KPI."""
         from .models import KpisAllCompRespV1
         return KpisAllCompRespV1.parse_obj(self._get(f"/v1/instruments/kpis/{kpiId}/{calcGroup}/{calc}"))
 
-    def get_kpi_calc_global(self, kpiId: int, calcGroup: str, calc: str) -> 'KpisAllCompRespV1':
+    def get_kpi_calc_global(self, kpiId: int, calcGroup: CalcGroup, calc: Calc) -> 'KpisAllCompRespV1':
         """Returns calculated KPI for all global instruments for a KPI."""
         from .models import KpisAllCompRespV1
         return KpisAllCompRespV1.parse_obj(self._get(f"/v1/instruments/global/kpis/{kpiId}/{calcGroup}/{calc}"))
